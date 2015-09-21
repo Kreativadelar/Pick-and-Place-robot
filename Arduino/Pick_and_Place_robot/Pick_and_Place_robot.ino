@@ -7,6 +7,7 @@
 MeLimitSwitch limitSwitch1(PORT_4, SLOT2); 
 MeLimitSwitch limitSwitch2(PORT_4, SLOT1); 
 MeLineFollower lineFinder(PORT_6);
+MeLightSensor lightSensor(PORT_3);
 MeDCMotor vaccum(M1);
 MeDCMotor valve(M2);
 
@@ -35,93 +36,77 @@ void loop()
    static bool once = false;
    int sensorState = lineFinder.readSensors();
    int color = 0;
+   int count = 0;
+   const int limit = 2;
 
    Serial.print("Sensor: ");
    Serial.println(sensorState);
-  
-   if(limitSwitch1.touched()) //If the limit switch is touched, the  return value is true.
-   {
-     Serial.println("State1: DOWN.");
-     delay(1);
-   }
-   if(!limitSwitch1.touched()){
-     Serial.println("State1: UP.");
-     delay(1);
-   }
-
-   if(limitSwitch2.touched()) //If the limit switch is touched, the  return value is true.
-   {
-     Serial.println("State2: DOWN.");
-     delay(1);
-   }
-   if(!limitSwitch2.touched()){
-     Serial.println("State2: UP.");
-     delay(1);
-   }
-  
+   
   if(!once){
-    rotStepper.setSpeed(500);
-    rotStepper.setAcceleration(100);
-    armStepper.setSpeed(500);
-    armStepper.setAcceleration(100);
-
-    armStepper.moveTo(-10000);
-    
-    while (armStepper.currentPosition() != -10000 && !limitSwitch2.touched()){ // Full speed basck to 0
-      armStepper.run();
-    }
-    armStepper.stop();
-    armStepper.setCurrentPosition(0);
-    delay(10);
-    armStepper.moveTo(100);
-    
-    while (armStepper.currentPosition() != 100){ // Full speed basck to 0
-      armStepper.run();
-    }
-    
-    rotStepper.moveTo(10000);
-    
-    while (rotStepper.currentPosition() != 10000 && !limitSwitch1.touched()){ // Full speed basck to 0
-      rotStepper.run();
-    }
-    rotStepper.stop();
-    rotStepper.setCurrentPosition(0);
-    delay(10);
-    rotStepper.moveTo(-100);
-    
-    while (rotStepper.currentPosition() != -100){ // Full speed basck to 0
-      rotStepper.run();
-    }
+    syncingAllAxis();
   }
 
- /*
   if(once){
-
     // Go to homepose
+    Serial.println("Going to home position"); 
     allAxisToPosition(-2350, 800, 2500, 1000);
 
-    //Pick new part
-    suction(true);
-    
-    //Check that part i suction cup
+    for(count = 0; count >= limit; count++){
+      //Pick new part
+      Serial.println("Picking up new part");
+      suction(true);
+
+      //Move to pick up sensor
+      Serial.println("Move to pick up sensor");
+      
+      //Check that part i suction cup
+      Serial.println("Check that we got a part");
+      sensorState = lineFinder.readSensors();
+      if(sensorState>0){
+        count = 0;
+        break;
+      }
+    }
+
+    // check for error
+    if(count > 0){
+      bool showError = false;
+      while(true){
+        if(!showError){
+          Serial.println("------------ ERROR ------------");
+          Serial.println("Error no parts in storage!");
+          Serial.println("-------------------------------");
+          showError = true;
+        }
+      }
+      delay(200);
+    }
     
     //Move to color sensor
+    Serial.println("Going to color sensor");
 
     //Check color
-
+    Serial.println("Checking color");
+    color = checkColor();
+    
     //Drop part at right color
-    if(color > 11){
+    if(color > 25 && color < 55){
       // Yellow part
+      Serial.println("Placing yellow part");
       suction(false);
-    }else if(color > 22){
+    }else if(color > 120 && color < 145){
       // red part
+      Serial.println("Placing red part");
       suction(false);
     }else{
       // bad part
+      Serial.println("----------- WARNING -----------");
+      Serial.println("Placing bad part!");
+      Serial.println("-------------------------------");
       suction(false);
     }
 
-    
+    /*
     allAxisToPosition(-2350, 2700, 2500, 1000);
     suction(true);
     allAxisToPosition(-2350, 800, 2500, 1000);
@@ -130,9 +115,9 @@ void loop()
     suction(false);
     allAxisToPosition(-4400, 800, 2500, 1000);
     allAxisToPosition(-2350, 800, 2500, 1000);
-   
+    */
   }
-  */
+  
 
   //255
   delay(3000);
@@ -160,7 +145,63 @@ void allAxisToPosition(long _position1, long _position2, float _speed, float _ac
 
 }
 
+void syncingAllAxis(){
+  syncingAxis(2);
+  syncingAxis(1);
+}
+
+void syncingAxis(int axis){
+  rotStepper.setSpeed(500);
+  rotStepper.setAcceleration(100);
+  armStepper.setSpeed(500);
+  armStepper.setAcceleration(100);
+
+  
+  if(axis == 1){
+    Serial.println("----------- WARNING -----------");
+    Serial.println("Syncing axis 1");
+    Serial.println("-------------------------------");
+    rotStepper.moveTo(10000);
+  
+    while (rotStepper.currentPosition() != 10000 && !limitSwitch1.touched()){ // Full speed basck to 0
+      rotStepper.run();
+    }
+    rotStepper.stop();
+    rotStepper.setCurrentPosition(0);
+    delay(10);
+    rotStepper.moveTo(-100);
+    
+    while (rotStepper.currentPosition() != -100){ // Full speed basck to 0
+      rotStepper.run();
+    }
+
+    Serial.println("Syncing for axis 1 is done");
+  }else if(axis == 2){
+    Serial.println("----------- WARNING -----------");
+    Serial.println("Syncing axis 2");
+    Serial.println("-------------------------------");
+    armStepper.moveTo(-10000);
+  
+    while (armStepper.currentPosition() != -10000 && !limitSwitch2.touched()){ // Full speed basck to 0
+      armStepper.run();
+    }
+    armStepper.stop();
+    armStepper.setCurrentPosition(0);
+    delay(10);
+    armStepper.moveTo(100);
+    
+    while (armStepper.currentPosition() != 100){ // Full speed basck to 0
+      armStepper.run();
+    }
+    
+    Serial.println("Syncing for axis 2 is done");
+  }
+}
+
 void suction(bool state){
+
+  delay(100);
+  
   if(state){
     valve.stop();
     vaccum.run(255);
@@ -172,6 +213,16 @@ void suction(bool state){
     delay(500);
     valve.stop();
   }
+}
+
+int checkColor(){
+  int value = lightSensor.read();  
+
+  // print the results to the serial monitor:
+  Serial.print("value = " );                                            
+  Serial.println(value); 
+
+  return value;
 }
 
 
